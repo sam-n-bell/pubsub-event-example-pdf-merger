@@ -1,3 +1,5 @@
+from typing import cast
+
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import storage
 
@@ -43,4 +45,4 @@ def download_blob(blob_name: str) -> bytes | None:
     blob = bucket.blob(blob_name)
     if not blob.exists():
         return None
-    return blob.download_as_bytes()
+    return cast(bytes, blob.download_as_bytes())

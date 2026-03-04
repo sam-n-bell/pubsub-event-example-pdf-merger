@@ -1,40 +1,46 @@
-import logging
-
+from cdc_pdf_pipeline import db
 from cdc_pdf_pipeline.broker import broker
 from cdc_pdf_pipeline.config import settings
+from cdc_pdf_pipeline.db import AsyncSessionLocal
 from cdc_pdf_pipeline.gcs import upload_bytes
-from cdc_pdf_pipeline.pdf import collect_pdfs, merge_pdfs
+from cdc_pdf_pipeline.log import configure_logging, get_logger
+from cdc_pdf_pipeline.pdf import merge_pdfs_from_bytes
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+# Configure logging at import time so the worker process gets structured logs
+# as soon as it loads this module. configure_logging() is idempotent.
+configure_logging()
 
 
 @broker.task
 async def merge_and_upload_pdfs(account_id: str, document_type: str) -> str:
     """
-    Collect PDFs from the source directory, merge them, and upload to GCS.
+    Fetch PDF rows from the database, merge them, and upload to GCS.
 
     GCS path: {account_id}/{document_type}.pdf
 
-    In production, replace collect_pdfs() with a DB query that fetches the
-    blobs for the four rows belonging to this record.
+    In production, filter fetch_all_pdfs() by account_id / document_type
+    (or whatever key GoldenGate replicates from the source Oracle table).
     """
-    pdf_paths = collect_pdfs(settings.pdfs_dir)
+    async with AsyncSessionLocal() as session:
+        pdf_bytes_list = await db.fetch_all_pdfs(session)
 
-    if not pdf_paths:
-        logger.warning("No PDF files found in %s — skipping merge", settings.pdfs_dir)
+    if not pdf_bytes_list:
+        logger.warning("no_pdfs_in_db")
         return ""
 
     logger.info(
-        "Merging %d PDF(s) for account_id=%s document_type=%s",
-        len(pdf_paths),
-        account_id,
-        document_type,
+        "merging_pdfs",
+        count=len(pdf_bytes_list),
+        account_id=account_id,
+        document_type=document_type,
     )
 
-    merged_bytes = merge_pdfs(pdf_paths)
+    merged_bytes = merge_pdfs_from_bytes(pdf_bytes_list)
     blob_name = f"{account_id}/{document_type}.pdf"
     upload_bytes(blob_name, merged_bytes, content_type="application/pdf")
-    logger.info("Uploaded merged PDF → gs://%s/%s", settings.gcs_bucket_name, blob_name)
+    logger.info("pdf_uploaded", bucket=settings.gcs_bucket_name, blob=blob_name)
     return blob_name
 
 
@@ -46,7 +52,7 @@ async def handle_record_deletion(table: str, record_id: str) -> None:
     In production, resolve which GCS objects belong to this record and remove
     them. Here we write a tombstone object as a demo.
     """
-    logger.info("DELETE event received — table=%s record_id=%s", table, record_id)
+    logger.info("delete_event_received", table=table, record_id=record_id)
 
     blob_name = f"deleted/{table}/{record_id}.tombstone"
     try:
@@ -55,6 +61,6 @@ async def handle_record_deletion(table: str, record_id: str) -> None:
             f"Deleted record {record_id} from {table}".encode(),
             content_type="text/plain",
         )
-        logger.info("Wrote deletion tombstone → gs://%s/%s", settings.gcs_bucket_name, blob_name)
+        logger.info("tombstone_written", bucket=settings.gcs_bucket_name, blob=blob_name)
     except Exception as exc:
-        logger.error("Failed to write deletion tombstone: %s", exc)
+        logger.error("tombstone_write_failed", error=str(exc))

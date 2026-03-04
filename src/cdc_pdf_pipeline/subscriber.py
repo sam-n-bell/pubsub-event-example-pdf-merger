@@ -19,16 +19,16 @@ Routing:
 
 import asyncio
 import json
-import logging
 import signal
 
 from google.cloud import pubsub_v1
 
 # config import also ensures PUBSUB_EMULATOR_HOST is set in os.environ
 from cdc_pdf_pipeline.config import settings
+from cdc_pdf_pipeline.log import configure_logging, get_logger
 from cdc_pdf_pipeline.tasks import handle_record_deletion, merge_and_upload_pdfs
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Tables whose INSERT/UPDATE events trigger a PDF merge
 PDF_TABLES = {"documents", "attachments", "files"}
@@ -43,7 +43,7 @@ def process_message(message: pubsub_v1.subscriber.message.Message) -> None:
     try:
         data = json.loads(message.data.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        logger.error("Failed to decode message: %s", exc)
+        logger.error("message_decode_failed", error=str(exc))
         message.nack()
         return
 
@@ -51,49 +51,48 @@ def process_message(message: pubsub_v1.subscriber.message.Message) -> None:
     operation = data.get("operation", "").upper()
     record = data.get("data", {})
 
-    logger.info("CDC event  table=%-12s  op=%s", table, operation)
+    logger.info("cdc_event_received", table=table, operation=operation)
 
     try:
         if operation == "DELETE":
             record_id = record.get("pk", "unknown")
             _dispatch(handle_record_deletion.kiq(table=table, record_id=record_id))
-            logger.info("Enqueued handle_record_deletion  table=%s  pk=%s", table, record_id)
+            logger.info("task_enqueued", task="handle_record_deletion", table=table, pk=record_id)
 
         elif operation in ("INSERT", "UPDATE") and table in PDF_TABLES:
             account_id = record.get("account_id", "")
             document_type = record.get("document_type", "")
             if not account_id or not document_type:
                 logger.warning(
-                    "Missing account_id or document_type in event — skipping. data=%s", record
+                    "incomplete_event", missing="account_id or document_type", data=record
                 )
             else:
                 _dispatch(
-                    merge_and_upload_pdfs.kiq(
-                        account_id=account_id, document_type=document_type
-                    )
+                    merge_and_upload_pdfs.kiq(account_id=account_id, document_type=document_type)
                 )
                 logger.info(
-                    "Enqueued merge_and_upload_pdfs  account_id=%s  document_type=%s",
-                    account_id,
-                    document_type,
+                    "task_enqueued",
+                    task="merge_and_upload_pdfs",
+                    account_id=account_id,
+                    document_type=document_type,
                 )
         else:
-            logger.debug("No task mapped for table=%s op=%s — acking", table, operation)
+            logger.debug("no_task_mapped", table=table, operation=operation)
 
         message.ack()
 
     except Exception as exc:
-        logger.error("Error dispatching task: %s", exc, exc_info=True)
+        logger.error("task_dispatch_failed", error=str(exc), exc_info=True)
         message.nack()
 
 
-def run() -> None:
+def _run() -> None:
     subscriber = pubsub_v1.SubscriberClient()
     subscription_path = subscriber.subscription_path(
         settings.pubsub_project_id, settings.pubsub_subscription_id
     )
 
-    logger.info("Subscribing to %s", subscription_path)
+    logger.info("subscriber_starting", subscription=subscription_path)
 
     with subscriber:
         future = subscriber.subscribe(subscription_path, callback=process_message)
@@ -103,12 +102,13 @@ def run() -> None:
         try:
             future.result()
         except Exception:
-            logger.info("Subscriber stopped.")
+            logger.info("subscriber_stopped")
+
+
+def run() -> None:
+    configure_logging()
+    _run()
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-    )
     run()

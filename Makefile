@@ -1,4 +1,4 @@
-.PHONY: infra init api worker subscriber publish
+.PHONY: infra init api worker subscriber publish load-pdfs format lint typecheck
 
 infra:
 	docker compose up -d
@@ -15,7 +15,19 @@ worker:
 subscriber:
 	uv run python -m cdc_pdf_pipeline.subscriber
 
-# Usage: make publish TABLE=documents OP=INSERT ACCOUNT=ACC-001 DOCTYPE=contract
+load-pdfs:
+	uv run python scripts/load_pdfs.py
+
+format:
+	uv run ruff format .
+
+lint:
+	uv run ruff check .
+
+typecheck:
+	uv run mypy src/
+
+# Usage: make publish
 publish:
 	uv run python -m cdc_pdf_pipeline.publisher \
 		--table $(TABLE) \

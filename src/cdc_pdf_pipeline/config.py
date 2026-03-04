@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
+    # PostgreSQL
+    database_url: str = "postgresql+asyncpg://cdc_user:cdc_pass@localhost:5432/cdc_pipeline"
+
     # PDF source directory (relative to project root)
     pdfs_dir: str = "pdfs"
 

@@ -1,18 +1,28 @@
 import asyncio
 import io
-import logging
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 
 from cdc_pdf_pipeline.config import settings
 from cdc_pdf_pipeline.gcs import download_blob
+from cdc_pdf_pipeline.log import configure_logging, get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    configure_logging()
+    yield
+
 
 app = FastAPI(
     title="CDC PDF Pipeline API",
     description="Fetch merged PDFs from GCS by account_id and document_type.",
+    lifespan=lifespan,
 )
 
 
@@ -43,8 +53,10 @@ async def get_document(account_id: str, document_type: str) -> StreamingResponse
     try:
         data = await asyncio.to_thread(download_blob, blob_name)
     except Exception as exc:
-        logger.error("GCS fetch failed for %s: %s", blob_name, exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to fetch document from storage")
+        logger.error("gcs_fetch_failed", blob=blob_name, error=str(exc), exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch document from storage"
+        ) from exc
 
     if data is None:
         raise HTTPException(
