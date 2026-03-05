@@ -1,9 +1,9 @@
 .PHONY: infra init api worker subscriber publish load-pdfs format lint typecheck
 
 infra:
-	docker compose up -d
+	docker compose up -d --wait
 
-init-infra:
+init-infra: infra
 	uv run python scripts/init_services.py
 
 api:

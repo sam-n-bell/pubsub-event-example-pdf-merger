@@ -1,9 +1,12 @@
+from collections.abc import Iterator
 from typing import cast
 
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import storage
 
 from cdc_pdf_pipeline.config import settings
+
+_CHUNK_SIZE = 256 * 1024  # 256 KB
 
 
 def get_storage_client() -> storage.Client:
@@ -35,14 +38,23 @@ def upload_bytes(
     blob.upload_from_string(data, content_type=content_type)
 
 
-def download_blob(blob_name: str) -> bytes | None:
+def blob_exists(blob_name: str) -> bool:
+    """Return True if the blob exists in the configured bucket."""
+    client = get_storage_client()
+    bucket = client.bucket(settings.gcs_bucket_name)
+    return cast(bool, bucket.blob(blob_name).exists())
+
+
+def stream_blob(blob_name: str) -> Iterator[bytes]:
     """
-    Download a GCS blob as bytes.
-    Returns None if the blob does not exist.
+    Yield the blob's contents in _CHUNK_SIZE chunks.
+
+    Assumes the blob exists — call blob_exists() first.
+    The GCS client is sync-only so this is a regular (non-async) generator;
+    wrap with iterate_in_threadpool when using inside an async context.
     """
     client = get_storage_client()
     bucket = client.bucket(settings.gcs_bucket_name)
-    blob = bucket.blob(blob_name)
-    if not blob.exists():
-        return None
-    return cast(bytes, blob.download_as_bytes())
+    with bucket.blob(blob_name).open("rb") as f:
+        while chunk := f.read(_CHUNK_SIZE):
+            yield chunk

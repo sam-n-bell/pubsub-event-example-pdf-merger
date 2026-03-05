@@ -1,13 +1,13 @@
 import asyncio
-import io
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import iterate_in_threadpool
 
 from cdc_pdf_pipeline.config import settings
-from cdc_pdf_pipeline.gcs import download_blob
+from cdc_pdf_pipeline.gcs import blob_exists, stream_blob
 from cdc_pdf_pipeline.log import configure_logging, get_logger
 
 logger = get_logger(__name__)
@@ -43,32 +43,30 @@ async def get_document(account_id: str, document_type: str) -> StreamingResponse
     """
     Compute the GCS blob path from the two path params and stream the PDF back.
 
+    GCS chunks are piped directly to the HTTP response via iterate_in_threadpool,
+    so the full file is never buffered in server memory.
+
     Path convention (mirrors what the worker uploads):
         {account_id}/{document_type}.pdf
     """
     blob_name = f"{account_id}/{document_type}.pdf"
 
-    # google-cloud-storage is sync-only; offload to a thread to avoid
-    # blocking the event loop.
     try:
-        data = await asyncio.to_thread(download_blob, blob_name)
+        exists = await asyncio.to_thread(blob_exists, blob_name)
     except Exception as exc:
-        logger.error("gcs_fetch_failed", blob=blob_name, error=str(exc), exc_info=True)
+        logger.error("gcs_exists_check_failed", blob=blob_name, error=str(exc), exc_info=True)
         raise HTTPException(
-            status_code=500, detail="Failed to fetch document from storage"
+            status_code=500, detail="Failed to reach storage"
         ) from exc
 
-    if data is None:
+    if not exists:
         raise HTTPException(
             status_code=404,
             detail=f"No document found at gs://{settings.gcs_bucket_name}/{blob_name}",
         )
 
     return StreamingResponse(
-        io.BytesIO(data),
+        iterate_in_threadpool(stream_blob(blob_name)),
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'inline; filename="{document_type}.pdf"',
-            "Content-Length": str(len(data)),
-        },
+        headers={"Content-Disposition": f'inline; filename="{document_type}.pdf"'},
     )
