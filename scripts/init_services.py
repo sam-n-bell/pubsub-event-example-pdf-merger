@@ -15,7 +15,7 @@ from google.cloud import pubsub_v1, storage
 
 # config import sets PUBSUB_EMULATOR_HOST in os.environ from .env
 from cdc_pdf_pipeline.config import settings
-from cdc_pdf_pipeline.db import create_tables
+from cdc_pdf_pipeline.db.ops import create_tables
 from cdc_pdf_pipeline.log import configure_logging, get_logger
 
 configure_logging()

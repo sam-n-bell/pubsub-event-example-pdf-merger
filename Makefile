@@ -10,10 +10,10 @@ api:
 	uv run uvicorn cdc_pdf_pipeline.api:app --reload --port 8000
 
 worker:
-	uv run taskiq worker cdc_pdf_pipeline.broker:broker cdc_pdf_pipeline.tasks
+	uv run taskiq worker cdc_pdf_pipeline.broker:broker cdc_pdf_pipeline.messaging.tasks
 
 subscriber:
-	uv run python -m cdc_pdf_pipeline.subscriber
+	uv run python -m cdc_pdf_pipeline.messaging.subscriber
 
 load-pdfs:
 	uv run python scripts/load_pdfs.py
@@ -25,11 +25,17 @@ lint:
 	uv run ruff check .
 
 typecheck:
-	uv run mypy src/
+	uv run mypy cdc_pdf_pipeline/
 
-# Usage: make publish
+# Defaults — override any on the command line:
+#   make publish TABLE=accounts OP=UPDATE ACCOUNT=XYZ DOCTYPE=invoice
+TABLE    ?= documents
+OP       ?= INSERT
+ACCOUNT  ?= ACC-001
+DOCTYPE  ?= contract
+
 publish:
-	uv run python -m cdc_pdf_pipeline.publisher \
+	uv run python -m cdc_pdf_pipeline.messaging.publisher \
 		--table $(TABLE) \
 		--operation $(OP) \
 		--account-id $(ACCOUNT) \

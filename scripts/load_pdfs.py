@@ -13,9 +13,9 @@ import sys
 from pathlib import Path
 
 from cdc_pdf_pipeline.config import settings
-from cdc_pdf_pipeline.db import AsyncSessionLocal, create_tables, upsert_pdf
+from cdc_pdf_pipeline.db.ops import AsyncSessionLocal, create_tables, upsert_pdf
 from cdc_pdf_pipeline.log import configure_logging, get_logger
-from cdc_pdf_pipeline.pdf import collect_pdfs
+from cdc_pdf_pipeline.storage.pdf import collect_pdfs
 
 configure_logging()
 logger = get_logger(__name__)

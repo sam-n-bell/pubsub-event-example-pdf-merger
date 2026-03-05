@@ -1,0 +1,90 @@
+# cdc-pdf-pipeline — agent reference
+
+CDC-driven PDF pipeline. Pub/Sub events → taskiq worker fetches PDFs from
+PostgreSQL, merges with pypdf, uploads to GCS. FastAPI streams the result back.
+
+## Commands
+
+```bash
+make infra          # docker compose up -d --wait (blocks until healthy)
+make init-infra     # infra + create Pub/Sub topic, Pub/Sub subscription, GCS bucket, DB table
+                    # must run before subscriber/worker; re-run after volumes are wiped
+make load-pdfs      # upsert pdfs/*.pdf into PostgreSQL (idempotent)
+make api            # uvicorn on :8000
+make worker         # taskiq worker
+make subscriber     # Pub/Sub pull loop
+make publish        # fire a test CDC event (defaults: documents/INSERT/ACC-001/contract)
+make format         # ruff format
+make lint           # ruff check
+make typecheck      # mypy cdc_pdf_pipeline/
+```
+
+## Package layout
+
+```
+cdc_pdf_pipeline/
+├── config.py           pydantic-settings; syncs PUBSUB_EMULATOR_HOST to os.environ on import
+├── log.py              configure_logging() + get_logger(); must be called at each process entry point
+├── broker.py           taskiq ListQueueBroker + RedisAsyncResultBackend
+├── api.py              FastAPI app + lifespan
+├── db/
+│   ├── models.py       Base, PdfDocument (bytea column)
+│   └── ops.py          engine, AsyncSessionLocal, get_session, create_tables,
+│                       fetch_all_pdfs, upsert_pdf
+├── storage/
+│   ├── gcs.py          get_storage_client, upload_bytes, blob_exists, stream_blob
+│   └── pdf.py          collect_pdfs, merge_pdfs, merge_pdfs_from_bytes
+└── messaging/
+    ├── tasks.py        merge_and_upload_pdfs, handle_record_deletion  (taskiq tasks)
+    ├── subscriber.py   Pub/Sub streaming pull → dispatches tasks
+    └── publisher.py    Typer CLI for manual event publishing
+```
+
+## Key patterns
+
+**Logging** — call `configure_logging()` once at each process entry point:
+- `api.py` lifespan
+- `messaging/subscriber.py` `run()`
+- `messaging/tasks.py` module level (worker picks it up on import)
+- scripts call it at the top
+
+**DB sessions** — two patterns depending on context:
+- FastAPI: `session: AsyncSession = Depends(get_session)` (from `db.ops`)
+- Tasks / scripts: `async with AsyncSessionLocal() as session:`
+
+**GCS streaming** — `stream_blob()` is a sync generator (GCS client is sync-only).
+Wrap with `iterate_in_threadpool` in async contexts (see `api.py`).
+
+**Emulator wiring**
+- Pub/Sub: `config.py` syncs `pubsub_emulator_host` → `os.environ["PUBSUB_EMULATOR_HOST"]` at import time; Google client reads it natively
+- GCS: `get_storage_client()` checks `settings.storage_emulator_host` and passes `AnonymousCredentials` + `api_endpoint`
+
+## CDC event shape
+
+```json
+{
+  "table": "documents",
+  "operation": "INSERT",
+  "data": { "pk": "rec-001", "account_id": "ACC-001", "document_type": "contract" }
+}
+```
+
+Tables that trigger `merge_and_upload_pdfs`: `documents`, `attachments`, `files`.
+Any table + DELETE triggers `handle_record_deletion`.
+
+GCS blob path: `{account_id}/{document_type}.pdf`
+API endpoint: `GET /documents/{account_id}/{document_type}`
+
+Inspect bucket contents directly (no UI):
+```bash
+curl http://localhost:4443/storage/v1/b/pdf-pipeline-bucket/o
+```
+
+## Environment
+
+All config via `.env` (copy from `.env.example`). Key vars:
+- `PUBSUB_EMULATOR_HOST` — set by config.py automatically from `pubsub_emulator_host`
+- `STORAGE_EMULATOR_HOST` — e.g. `http://localhost:4443`
+- `DATABASE_URL` — must use `postgresql+asyncpg://` scheme
+- `REDIS_URL`
+- `JSON_LOGS=true` — switch structlog to JSON renderer (default: pretty console)
