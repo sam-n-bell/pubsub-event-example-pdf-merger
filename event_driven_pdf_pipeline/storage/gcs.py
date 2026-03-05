@@ -4,7 +4,7 @@ from typing import cast
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import storage
 
-from cdc_pdf_pipeline.config import settings
+from event_driven_pdf_pipeline.config import settings
 
 _CHUNK_SIZE = 256 * 1024  # 256 KB
 

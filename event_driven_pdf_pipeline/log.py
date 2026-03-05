@@ -2,7 +2,7 @@
 Structured logging via structlog.
 
 Usage in any module:
-    from cdc_pdf_pipeline.log import get_logger
+    from event_driven_pdf_pipeline.log import get_logger
     logger = get_logger(__name__)
     logger.info("event_name", key=value, other_key=other_value)
 

@@ -1,4 +1,4 @@
-# cdc-pdf-pipeline
+# event-driven-pdf-pipeline
 
 Demo of a CDC-driven PDF processing pipeline. Mocked infrastructure runs in
 Docker; the Python processes run on the host via `uv`.
@@ -57,7 +57,7 @@ back on demand.
 ### 1. Clone / enter the project
 
 ```bash
-cd ~/Code/cdc-pdf-pipeline
+cd ~/Code/event-driven-pdf-pipeline
 ```
 
 ### 2. Copy and review the env file
@@ -131,7 +131,7 @@ Open **four terminals**, each from the project root.
 ```bash
 make worker
 # expands to:
-# uv run taskiq worker cdc_pdf_pipeline.broker:broker cdc_pdf_pipeline.messaging.tasks
+# uv run taskiq worker event_driven_pdf_pipeline.broker:broker event_driven_pdf_pipeline.messaging.tasks
 ```
 
 **Terminal 2 — Pub/Sub subscriber**
@@ -139,7 +139,7 @@ make worker
 ```bash
 make subscriber
 # expands to:
-# uv run python -m cdc_pdf_pipeline.messaging.subscriber
+# uv run python -m event_driven_pdf_pipeline.messaging.subscriber
 ```
 
 **Terminal 3 — FastAPI**
@@ -147,7 +147,7 @@ make subscriber
 ```bash
 make api
 # expands to:
-# uv run uvicorn cdc_pdf_pipeline.api:app --reload --port 8000
+# uv run uvicorn event_driven_pdf_pipeline.api:app --reload --port 8000
 ```
 
 **Terminal 4 — publish test events**
@@ -179,7 +179,7 @@ open merged.pdf
 
 Trigger a deletion:
 ```bash
-uv run python -m cdc_pdf_pipeline.messaging.publisher \
+uv run python -m event_driven_pdf_pipeline.messaging.publisher \
     --table documents \
     --operation DELETE \
     --pk rec-001
@@ -187,14 +187,14 @@ uv run python -m cdc_pdf_pipeline.messaging.publisher \
 
 Show all options:
 ```bash
-uv run python -m cdc_pdf_pipeline.messaging.publisher --help
+uv run python -m event_driven_pdf_pipeline.messaging.publisher --help
 ```
 
 Visit `http://localhost:8000/docs` for the interactive Swagger UI.
 ## Project layout
 
 ```
-cdc-pdf-pipeline/
+event-driven-pdf-pipeline/
 ├── docker-compose.yml          # Redis, Pub/Sub emulator, fake-gcs-server, Postgres
 ├── pyproject.toml              # uv / hatchling project
 ├── Makefile                    # infra, init-infra, api, worker, subscriber,
@@ -204,7 +204,7 @@ cdc-pdf-pipeline/
 ├── scripts/
 │   ├── init_services.py        # creates Pub/Sub topic/sub, GCS bucket, DB tables
 │   └── load_pdfs.py            # upserts pdfs/*.pdf into the pdf_documents table
-└── cdc_pdf_pipeline/
+└── event_driven_pdf_pipeline/
     ├── config.py               # pydantic-settings (reads .env)
     ├── log.py                  # structlog setup: configure_logging(), get_logger()
     ├── broker.py               # taskiq ListQueueBroker + RedisAsyncResultBackend

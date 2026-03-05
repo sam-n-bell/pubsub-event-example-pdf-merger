@@ -1,9 +1,9 @@
-from cdc_pdf_pipeline.broker import broker
-from cdc_pdf_pipeline.config import settings
-from cdc_pdf_pipeline.db.ops import fetch_all_pdfs_new_session
-from cdc_pdf_pipeline.log import configure_logging, get_logger
-from cdc_pdf_pipeline.storage.gcs import upload_bytes
-from cdc_pdf_pipeline.storage.pdf import merge_pdfs_from_bytes
+from event_driven_pdf_pipeline.broker import broker
+from event_driven_pdf_pipeline.config import settings
+from event_driven_pdf_pipeline.db.ops import fetch_all_pdfs_new_session
+from event_driven_pdf_pipeline.log import configure_logging, get_logger
+from event_driven_pdf_pipeline.storage.gcs import upload_bytes
+from event_driven_pdf_pipeline.storage.pdf import merge_pdfs_from_bytes
 
 logger = get_logger(__name__)
 

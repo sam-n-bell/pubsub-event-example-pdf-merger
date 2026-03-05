@@ -4,12 +4,12 @@ CLI for manually publishing mock CDC events to the Pub/Sub topic.
 Usage examples:
 
   # Trigger a PDF merge
-  uv run python -m cdc_pdf_pipeline.pipeline.publisher \\
+  uv run python -m event_driven_pdf_pipeline.pipeline.publisher \\
       --table documents --operation INSERT \\
       --account-id ACC-001 --document-type contract
 
   # Trigger a deletion
-  uv run python -m cdc_pdf_pipeline.pipeline.publisher \\
+  uv run python -m event_driven_pdf_pipeline.pipeline.publisher \\
       --table documents --operation DELETE \\
       --pk rec-999
 """
@@ -21,7 +21,7 @@ import typer
 from google.cloud import pubsub_v1
 
 # config import also ensures PUBSUB_EMULATOR_HOST is set in os.environ
-from cdc_pdf_pipeline.config import settings
+from event_driven_pdf_pipeline.config import settings
 
 app = typer.Typer(help="Publish a mock CDC event to the Pub/Sub topic.")
 

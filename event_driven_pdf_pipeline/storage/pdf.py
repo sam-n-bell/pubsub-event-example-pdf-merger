@@ -10,7 +10,7 @@ from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
 
-from cdc_pdf_pipeline.log import get_logger
+from event_driven_pdf_pipeline.log import get_logger
 
 logger = get_logger(__name__)
 

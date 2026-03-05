@@ -24,9 +24,9 @@ import signal
 from google.cloud import pubsub_v1
 
 # config import also ensures PUBSUB_EMULATOR_HOST is set in os.environ
-from cdc_pdf_pipeline.config import settings
-from cdc_pdf_pipeline.log import configure_logging, get_logger
-from cdc_pdf_pipeline.messaging.tasks import handle_record_deletion, merge_and_upload_pdfs
+from event_driven_pdf_pipeline.config import settings
+from event_driven_pdf_pipeline.log import configure_logging, get_logger
+from event_driven_pdf_pipeline.messaging.tasks import handle_record_deletion, merge_and_upload_pdfs
 
 logger = get_logger(__name__)
 

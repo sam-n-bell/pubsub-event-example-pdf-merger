@@ -7,13 +7,13 @@ init-infra: infra
 	uv run python scripts/init_services.py
 
 api:
-	uv run uvicorn cdc_pdf_pipeline.api:app --reload --port 8000
+	uv run uvicorn event_driven_pdf_pipeline.api:app --reload --port 8000
 
 worker:
-	uv run taskiq worker cdc_pdf_pipeline.broker:broker cdc_pdf_pipeline.messaging.tasks
+	uv run taskiq worker event_driven_pdf_pipeline.broker:broker event_driven_pdf_pipeline.messaging.tasks
 
 subscriber:
-	uv run python -m cdc_pdf_pipeline.messaging.subscriber
+	uv run python -m event_driven_pdf_pipeline.messaging.subscriber
 
 load-pdfs:
 	uv run python scripts/load_pdfs.py
@@ -25,7 +25,7 @@ lint:
 	uv run ruff check .
 
 typecheck:
-	uv run mypy cdc_pdf_pipeline/
+	uv run mypy event_driven_pdf_pipeline/
 
 # Defaults — override any on the command line:
 #   make publish TABLE=accounts OP=UPDATE ACCOUNT=XYZ DOCTYPE=invoice
@@ -35,7 +35,7 @@ ACCOUNT  ?= ACC-001
 DOCTYPE  ?= contract
 
 publish:
-	uv run python -m cdc_pdf_pipeline.messaging.publisher \
+	uv run python -m event_driven_pdf_pipeline.messaging.publisher \
 		--table $(TABLE) \
 		--operation $(OP) \
 		--account-id $(ACCOUNT) \

@@ -6,9 +6,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import iterate_in_threadpool
 
-from cdc_pdf_pipeline.config import settings
-from cdc_pdf_pipeline.log import configure_logging, get_logger
-from cdc_pdf_pipeline.storage.gcs import blob_exists, stream_blob
+from event_driven_pdf_pipeline.config import settings
+from event_driven_pdf_pipeline.log import configure_logging, get_logger
+from event_driven_pdf_pipeline.storage.gcs import blob_exists, stream_blob
 
 logger = get_logger(__name__)
 

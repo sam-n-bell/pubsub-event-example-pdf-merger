@@ -1,4 +1,4 @@
-# cdc-pdf-pipeline — agent reference
+# event-driven-pdf-pipeline — agent reference
 
 CDC-driven PDF pipeline. Pub/Sub events → taskiq worker fetches PDFs from
 PostgreSQL, merges with pypdf, uploads to GCS. FastAPI streams the result back.
@@ -16,13 +16,13 @@ make subscriber     # Pub/Sub pull loop
 make publish        # fire a test CDC event (defaults: documents/INSERT/ACC-001/contract)
 make format         # ruff format
 make lint           # ruff check
-make typecheck      # mypy cdc_pdf_pipeline/
+make typecheck      # mypy event_driven_pdf_pipeline/
 ```
 
 ## Package layout
 
 ```
-cdc_pdf_pipeline/
+event_driven_pdf_pipeline/
 ├── config.py           pydantic-settings; syncs PUBSUB_EMULATOR_HOST to os.environ on import
 ├── log.py              configure_logging() + get_logger(); must be called at each process entry point
 ├── broker.py           taskiq ListQueueBroker + RedisAsyncResultBackend

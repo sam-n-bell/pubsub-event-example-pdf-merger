@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from cdc_pdf_pipeline.config import settings
-from cdc_pdf_pipeline.db.models import Base, PdfDocument
-from cdc_pdf_pipeline.log import get_logger
+from event_driven_pdf_pipeline.config import settings
+from event_driven_pdf_pipeline.db.models import Base, PdfDocument
+from event_driven_pdf_pipeline.log import get_logger
 
 logger = get_logger(__name__)
 
