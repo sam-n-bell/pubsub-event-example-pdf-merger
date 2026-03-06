@@ -16,7 +16,7 @@ make subscriber     # Pub/Sub pull loop
 make publish        # fire a test CDC event (defaults: documents/INSERT/ACC-001/contract)
 make format         # ruff format
 make lint           # ruff check
-make typecheck      # mypy event_driven_pdf_pipeline/
+make typecheck      # ty check event_driven_pdf_pipeline/
 ```
 
 ## Package layout
@@ -61,16 +61,29 @@ Wrap with `iterate_in_threadpool` in async contexts (see `api.py`).
 
 ## CDC event shape
 
+GoldenGate JSON operation-based formatter. `op_type` uses single chars:
+`I` (INSERT), `U` (UPDATE), `D` (DELETE).
+
 ```json
 {
-  "table": "documents",
-  "operation": "INSERT",
-  "data": { "pk": "rec-001", "account_id": "ACC-001", "document_type": "contract" }
+  "table": "SCHEMA.DOCUMENTS",
+  "op_type": "I",
+  "op_ts": "2024-01-15 10:23:45.000000",
+  "current_ts": "2024-01-15 10:23:45.123000",
+  "pos": "00000000000000001234",
+  "primary_keys": ["id"],
+  "before": null,
+  "after": { "id": "rec-001", "account_id": "ACC-001", "document_type": "contract" }
 }
 ```
 
-Tables that trigger `merge_and_upload_pdfs`: `documents`, `attachments`, `files`.
-Any table + DELETE triggers `handle_record_deletion`.
+- INSERT → `before=null`, `after=row`
+- UPDATE → `before=row`, `after=row`
+- DELETE → `before=row`, `after=null`
+
+Tables that trigger `merge_and_upload_pdfs` (reads from `after`):
+`documents`, `attachments`, `files`.
+Any table + `D` triggers `handle_record_deletion` (reads `id` from `before`).
 
 GCS blob path: `{account_id}/{document_type}.pdf`
 API endpoint: `GET /documents/{account_id}/{document_type}`

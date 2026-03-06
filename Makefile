@@ -25,7 +25,7 @@ lint:
 	uv run ruff check .
 
 typecheck:
-	uv run mypy event_driven_pdf_pipeline/
+	uv run ty check event_driven_pdf_pipeline/
 
 # Defaults — override any on the command line:
 #   make publish TABLE=accounts OP=UPDATE ACCOUNT=XYZ DOCTYPE=invoice

@@ -1,31 +1,25 @@
 """
-Pub/Sub subscriber that listens for CDC events and dispatches taskiq tasks.
+Pub/Sub subscriber that listens for events and dispatches taskiq tasks.
 
-CDC event JSON shape:
-{
-    "table": "documents",        # documents | accounts | metadata
-    "operation": "INSERT",       # INSERT | UPDATE | DELETE
-    "data": {
-        "pk": "rec-001",
-        "account_id": "ACC-001",
-        "document_type": "contract"
-    }
-}
+All incoming messages are validated against CdcEvent (messaging/schemas.py).
+Malformed messages are nack'd and logged immediately.
 
 Routing:
-  INSERT / UPDATE on "documents" → merge_and_upload_pdfs
-  DELETE  on any table           → handle_record_deletion
+  I (INSERT) / U (UPDATE) on PDF_TABLES → merge_and_upload_pdfs
+  D (DELETE) on any table               → handle_record_deletion
 """
 
 import asyncio
-import json
 import signal
 
 from google.cloud import pubsub_v1
+from google.cloud.pubsub_v1.subscriber.message import Message
+from pydantic import ValidationError
 
 # config import also ensures PUBSUB_EMULATOR_HOST is set in os.environ
 from event_driven_pdf_pipeline.config import settings
 from event_driven_pdf_pipeline.log import configure_logging, get_logger
+from event_driven_pdf_pipeline.messaging.schemas import CdcEvent, OpType
 from event_driven_pdf_pipeline.messaging.tasks import handle_record_deletion, merge_and_upload_pdfs
 
 logger = get_logger(__name__)
@@ -39,45 +33,52 @@ def _dispatch(coro) -> None:
     asyncio.run(coro)
 
 
-def process_message(message: pubsub_v1.subscriber.message.Message) -> None:
+def process_message(message: Message) -> None:
     try:
-        data = json.loads(message.data.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        logger.error("message_decode_failed", error=str(exc))
+        event = CdcEvent.model_validate_json(message.data.decode("utf-8"))
+    except (ValidationError, UnicodeDecodeError) as exc:
+        logger.error("message_validation_failed", error=str(exc))
         message.nack()
         return
 
-    table = data.get("table", "")
-    operation = data.get("operation", "").upper()
-    record = data.get("data", {})
-
-    logger.info("cdc_event_received", table=table, operation=operation)
+    logger.info("cdc_event_received", table=event.table, op_type=event.op_type)
 
     try:
-        if operation == "DELETE":
-            record_id = record.get("pk", "unknown")
-            _dispatch(handle_record_deletion.kiq(table=table, record_id=record_id))
-            logger.info("task_enqueued", task="handle_record_deletion", table=table, pk=record_id)
+        if event.op_type == OpType.DELETE:
+            # DELETE carries the deleted row in `before`
+            record_id = event.before.id if event.before else "unknown"
+            _dispatch(handle_record_deletion.kiq(table=event.table, record_id=record_id))
+            logger.info(
+                "task_enqueued",
+                task="handle_record_deletion",
+                table=event.table,
+                pk=record_id,
+            )
 
-        elif operation in ("INSERT", "UPDATE") and table in PDF_TABLES:
-            account_id = record.get("account_id", "")
-            document_type = record.get("document_type", "")
-            if not account_id or not document_type:
+        elif event.op_type in (OpType.INSERT, OpType.UPDATE) and event.table in PDF_TABLES:
+            # INSERT / UPDATE carry the new row in `after`
+            after = event.after
+            if after is None or not after.account_id or not after.document_type:
                 logger.warning(
-                    "incomplete_event", missing="account_id or document_type", data=record
+                    "incomplete_event",
+                    missing="after.account_id or after.document_type",
+                    after=after.model_dump() if after else None,
                 )
             else:
                 _dispatch(
-                    merge_and_upload_pdfs.kiq(account_id=account_id, document_type=document_type)
+                    merge_and_upload_pdfs.kiq(
+                        account_id=after.account_id,
+                        document_type=after.document_type,
+                    )
                 )
                 logger.info(
                     "task_enqueued",
                     task="merge_and_upload_pdfs",
-                    account_id=account_id,
-                    document_type=document_type,
+                    account_id=after.account_id,
+                    document_type=after.document_type,
                 )
         else:
-            logger.debug("no_task_mapped", table=table, operation=operation)
+            logger.debug("no_task_mapped", table=event.table, op_type=event.op_type)
 
         message.ack()
 

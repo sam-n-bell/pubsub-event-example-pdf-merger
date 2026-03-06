@@ -37,12 +37,15 @@ back on demand.
 
 **CDC event → task routing:**
 
-| table       | operation       | task                     |
-|-------------|-----------------|---------------------------|
-| documents   | INSERT / UPDATE | `merge_and_upload_pdfs`  |
-| attachments | INSERT / UPDATE | `merge_and_upload_pdfs`  |
-| files       | INSERT / UPDATE | `merge_and_upload_pdfs`  |
-| *any*       | DELETE          | `handle_record_deletion` |
+Events conform to the GoldenGate JSON operation-based formatter.
+`op_type` values: `I` (INSERT), `U` (UPDATE), `D` (DELETE).
+
+| table       | op_type | task                     |
+|-------------|---------|---------------------------|
+| documents   | I / U   | `merge_and_upload_pdfs`  |
+| attachments | I / U   | `merge_and_upload_pdfs`  |
+| files       | I / U   | `merge_and_upload_pdfs`  |
+| *any*       | D       | `handle_record_deletion` |
 
 **GCS path convention:** `{account_id}/{document_type}.pdf`
 
