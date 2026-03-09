@@ -5,6 +5,24 @@ Reflects the Oracle GoldenGate JSON operation-based formatter output.
 Every message on the topic must conform to CdcEvent. Both the publisher
 (outbound) and subscriber (inbound validation) use this schema.
 
+Schema shape:
+
+{
+  "type": "record",
+  "name": "CdcEvent",
+  "fields": [
+    { "name": "table",        "type": "string" },
+    { "name": "op_type",      "type": "string" },
+    { "name": "op_ts",        "type": "string", "default": "" },
+    { "name": "current_ts",   "type": "string", "default": "" },
+    { "name": "pos",          "type": "string", "default": "" },
+    { "name": "primary_keys", "type": { "type": "array", "items": "string" }, "default": [] },
+    { "name": "before", "type": [ "null", { "type": "map", "values": "string" } ], "default": null },
+    { "name": "after",  "type": [ "null", { "type": "map", "values": "string" } ], "default": null }
+  ]
+}
+
+
 JSON shape:
 {
     "table": "SCHEMA.DOCUMENTS",
